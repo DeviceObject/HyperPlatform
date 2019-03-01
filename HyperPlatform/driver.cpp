@@ -18,6 +18,7 @@
 #include "vm.h"
 #include "performance.h"
 
+//注释版本，为了能够完全读懂，把与“传统国内内内核驱动发的习惯”不同的地方都作了注释，也希望大家能够开发出更加规范的内核驱动
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -39,15 +40,23 @@ extern "C" {
 // prototypes
 //
 
+ //see https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/content/wdm/nc-wdm-driver_initialize
 DRIVER_INITIALIZE DriverEntry;
 
+ //see https://msdn.microsoft.com/en-us/library/windows/hardware/ff564886(v=vs.85).aspx
 static DRIVER_UNLOAD DriverpDriverUnload;
-
+ //_IRQL_requires_max_(irql),irql 是可调用函数的最大 IRQL
+ //see https://msdn.microsoft.com/zh-cn/library/hh454226
 _IRQL_requires_max_(PASSIVE_LEVEL) bool DriverpIsSuppoetedOS();
 
+ //#pragma alloc_text是使编译器把代码放到特定段的宏
+ //see https://blog.csdn.net/wolfman125/article/details/56665300
 #if defined(ALLOC_PRAGMA)
+//将以下代码放到INIT段
 #pragma alloc_text(INIT, DriverEntry)
+//将以下代码放到分页内存中
 #pragma alloc_text(PAGE, DriverpDriverUnload)
+//将以下代码放到INIT段
 #pragma alloc_text(INIT, DriverpIsSuppoetedOS)
 #endif
 
@@ -61,10 +70,14 @@ _IRQL_requires_max_(PASSIVE_LEVEL) bool DriverpIsSuppoetedOS();
 // implementations
 //
 
-// A driver entry point
+// 驱动程序入口点
+//_Use_decl_annotations_ 可能用于在函数定义 （也称为函数体） 上替代的标头中的批注列表。 当_Use_decl_annotations_是相同的函数的范围内标头显示的批注使用像它们也会存在于具有定义_Use_decl_annotations_批注。
+//see https://docs.microsoft.com/zh-cn/visualstudio/code-quality/annotating-function-behavior?view=vs-2015
 _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
                                             PUNICODE_STRING registry_path) {
   UNREFERENCED_PARAMETER(registry_path);
+
+  //是 PAGED_ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
   PAGED_CODE();
 
   static const wchar_t kLogFilePath[] = L"\\SystemRoot\\HyperPlatform.log";
@@ -74,6 +87,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
 
   auto status = STATUS_UNSUCCESSFUL;
   driver_object->DriverUnload = DriverpDriverUnload;
+  //等价于KdBreakPoint()
   HYPERPLATFORM_COMMON_DBG_BREAK();
 
   // Request NX Non-Paged Pool when available
@@ -81,6 +95,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
 
   // Initialize log functions
   bool need_reinitialization = false;
+  // 打开log记录
   status = LogInitialization(kLogLevel, kLogFilePath);
   if (status == STATUS_REINITIALIZATION_NEEDED) {
     need_reinitialization = true;
@@ -89,12 +104,14 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   }
 
   // Test if the system is supported
+  // 判断系统是否支持
   if (!DriverpIsSuppoetedOS()) {
     LogTermination();
     return STATUS_CANCELLED;
   }
 
   // Initialize global variables
+  // 初始化全局变量
   status = GlobalObjectInitialization();
   if (!NT_SUCCESS(status)) {
     LogTermination();
@@ -102,6 +119,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   }
 
   // Initialize perf functions
+  // 初始化 性能 函数
   status = PerfInitialization();
   if (!NT_SUCCESS(status)) {
     GlobalObjectTermination();
@@ -110,6 +128,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   }
 
   // Initialize utility functions
+  // 初始化 utility 函数
   status = UtilInitialization(driver_object);
   if (!NT_SUCCESS(status)) {
     PerfTermination();
@@ -119,6 +138,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   }
 
   // Initialize power callback
+  // 初始化 电源 回调
   status = PowerCallbackInitialization();
   if (!NT_SUCCESS(status)) {
     UtilTermination();
@@ -129,6 +149,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   }
 
   // Initialize hot-plug callback
+  // 初始化 热插件 回调
   status = HotplugCallbackInitialization();
   if (!NT_SUCCESS(status)) {
     PowerCallbackTermination();
@@ -140,6 +161,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   }
 
   // Virtualize all processors
+  // 虚拟化 所有处理器
   status = VmInitialization();
   if (!NT_SUCCESS(status)) {
     HotplugCallbackTermination();
@@ -160,7 +182,9 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
   return status;
 }
 
+// 卸载相关例程
 // Unload handler
+// 驱动卸载
 _Use_decl_annotations_ static void DriverpDriverUnload(
     PDRIVER_OBJECT driver_object) {
   UNREFERENCED_PARAMETER(driver_object);
@@ -178,6 +202,7 @@ _Use_decl_annotations_ static void DriverpDriverUnload(
 }
 
 // Test if the system is one of supported OS versions
+// 判断是否是支持的系统
 _Use_decl_annotations_ bool DriverpIsSuppoetedOS() {
   PAGED_CODE();
 
