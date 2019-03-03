@@ -162,6 +162,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
 
   // Virtualize all processors
   // 虚拟化 所有处理器
+  // 此处进入虚拟化
   status = VmInitialization();
   if (!NT_SUCCESS(status)) {
     HotplugCallbackTermination();

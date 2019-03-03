@@ -140,26 +140,30 @@ inline ULONG GetSegmentLimit(_In_ ULONG selector) {
 #endif
 
 // Checks if a VMM can be installed, and so, installs it
+// 检测是否可以安装VMM，如果可以，则进行安装
+// VMM 即VM Monitor
 _Use_decl_annotations_ NTSTATUS VmInitialization() {
   PAGED_CODE();
-
+ // 检测HyperPlatform是否已经被安装
   if (VmpIsHyperPlatformInstalled()) {
     return STATUS_CANCELLED;
   }
-
+ // 检测是否支持虚拟化指令
   if (!VmpIsVmxAvailable()) {
     return STATUS_HV_FEATURE_UNAVAILABLE;
   }
-
+ // 为处理共享数据分配内存，这里实际上是个指针，被修饰了
   const auto shared_data = VmpInitializeSharedData();
   if (!shared_data) {
     return STATUS_MEMORY_NOT_ALLOCATED;
   }
 
   // Read and store all MTRRs to set a correct memory type for EPT
+  // see https://www.cnblogs.com/biglucky/p/4688295.html 微软白皮书
   EptInitializeMtrrEntries();
 
   // Virtualize all processors
+  // 虚拟化所有处理器
   auto status = UtilForEachProcessor(VmpStartVm, shared_data);
   if (!NT_SUCCESS(status)) {
     UtilForEachProcessor(VmpStopVm, nullptr);
@@ -172,8 +176,10 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
 _Use_decl_annotations_ static bool VmpIsVmxAvailable() {
   PAGED_CODE();
 
+  // see 白皮书
   // See: DISCOVERING SUPPORT FOR VMX
   // If CPUID.1:ECX.VMX[bit 5]=1, then VMX operation is supported.
+  // 如果 CPUID.1:ECX.VMX[bit 5]=1，那么 VMX操作被支持
   int cpu_info[4] = {};
   __cpuid(cpu_info, 1);
   const CpuFeaturesEcx cpu_features = {static_cast<ULONG_PTR>(cpu_info[2])};
